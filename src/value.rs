@@ -21,18 +21,14 @@ impl D1Value {
 
     /// Read the value as a string
     ///
-    /// # Panics
-    ///
-    /// Panics if the value is not a string
+    /// Returns an empty string if the value is not a string.
     pub(crate) fn read_string(&self) -> String {
         self._row.as_string().unwrap_or_default()
     }
 
     /// Read the value as a boolean
     ///
-    /// # Panics
-    ///
-    /// Panics if the value is not a boolean
+    /// Returns `false` if the value is not a boolean.
     #[allow(dead_code)]
     pub(crate) fn read_bool(&self) -> bool {
         self._row.as_bool().unwrap_or(false)
@@ -54,9 +50,7 @@ impl D1Value {
 
     /// Read the value as a blob (binary data)
     ///
-    /// # Panics
-    ///
-    /// Panics if the value is not a Uint8Array
+    /// Returns an empty Vec if the value is not a Uint8Array.
     pub(crate) fn read_blob(&self) -> Vec<u8> {
         if !self._row.is_instance_of::<Uint8Array>() {
             return Vec::new();
