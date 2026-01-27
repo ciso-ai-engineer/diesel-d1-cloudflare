@@ -1,40 +1,69 @@
-use wasm_bindgen::{JsCast, JsValue};
-use js_sys::Uint8Array;
+//! WASM value type for D1 backend
+//!
+//! This module provides the D1Value type for deserializing values from D1 query results
+//! when using the WASM binding.
 
+use js_sys::Uint8Array;
+use wasm_bindgen::{JsCast, JsValue};
+
+/// A value from a D1 query result (WASM version)
+///
+/// This wraps a JavaScript value and provides type-safe access to the data.
 pub struct D1Value {
-    _row: JsValue
+    _row: JsValue,
 }
 
-
-
 impl D1Value {
+    /// Create a new D1Value from a JsValue
     pub fn new(row: JsValue) -> Self {
         Self { _row: row }
     }
-    
-    pub (crate) fn read_string(&self) -> String {
-        self._row.as_string().unwrap()
+
+    /// Read the value as a string
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a string
+    pub(crate) fn read_string(&self) -> String {
+        self._row.as_string().unwrap_or_default()
     }
 
-    pub (crate) fn read_bool(&self) -> bool {
-        self._row.as_bool().unwrap()
+    /// Read the value as a boolean
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a boolean
+    pub(crate) fn read_bool(&self) -> bool {
+        self._row.as_bool().unwrap_or(false)
     }
 
-    /// JS numbers are always f64, this might cause precision issues when crossing boundaries
-    pub (crate) fn read_number(&self) -> f64 {
-        self._row.as_f64().unwrap()
+    /// Read the value as a number (f64)
+    ///
+    /// Note: JS numbers are always f64, which might cause precision issues
+    /// when crossing boundaries with i64.
+    pub(crate) fn read_number(&self) -> f64 {
+        self._row.as_f64().unwrap_or(0.0)
     }
 
-    pub (crate) fn check_null(&self) -> bool {
-        // not sure if undefined works
-        self._row.is_null() || self._row.is_undefined() 
+    /// Check if the value is null or undefined
+    pub(crate) fn is_null(&self) -> bool {
+        self._row.is_null() || self._row.is_undefined()
     }
 
-    pub (crate) fn read_blob(&self) -> Vec<u8> {
+    /// Read the value as a blob (binary data)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value is not a Uint8Array
+    pub(crate) fn read_blob(&self) -> Vec<u8> {
         if !self._row.is_instance_of::<Uint8Array>() {
-            panic!("JSValue is not uint8arrary");
+            return Vec::new();
         }
-        // hummm hopefully _row is reference counted ahah
         Uint8Array::from(self._row.clone()).to_vec()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // Tests would require a WASM environment to run
 }

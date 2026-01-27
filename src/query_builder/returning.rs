@@ -1,17 +1,7 @@
-use diesel::backend::Backend;
-use diesel::query_builder::ReturningClause;
-use diesel::query_builder::{AstPass, QueryFragment};
-use diesel::result::QueryResult;
-use crate::backend::{D1Backend, SqliteReturningClause};
+//! RETURNING clause support for D1 backend
+//!
+//! Note: D1/SQLite supports RETURNING but it's currently disabled
+//! in this backend due to complexity in implementing the AST properly.
 
-// impl<Expr> QueryFragment<D1Backend, SqliteReturningClause> for ReturningClause<Expr>
-// where
-//     Expr: QueryFragment<D1Backend>,
-// {
-//     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, D1Backend>) -> QueryResult<()> {
-//         out.skip_from(true);
-//         out.push_sql(" RETURNING ");
-//         self.0.walk_ast(out.reborrow())?;
-//         Ok(())
-//     }
-// }
+// Future implementation for RETURNING clause support
+// Currently disabled as it requires proper SQLite AST implementation
