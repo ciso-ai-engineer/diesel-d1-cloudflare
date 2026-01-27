@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        feature: [http, wasm]
+        include:
+          - feature: http
+            target: x86_64-unknown-linux-gnu
+          - feature: wasm
+            target: wasm32-unknown-unknown
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.feature }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build with ${{ matrix.feature }} feature
+        run: cargo build --features ${{ matrix.feature }} --target ${{ matrix.target }}
+
+      - name: Run tests (HTTP only)
+        if: matrix.feature == 'http'
+        run: cargo test --features ${{ matrix.feature }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Clippy (HTTP)
+        run: cargo clippy --features http -- -D warnings
+
+      - name: Clippy (WASM)
+        run: cargo clippy --features wasm --target wasm32-unknown-unknown -- -D warnings
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Build docs
+        run: cargo doc --features http --no-deps
+        env:
+          RUSTDOCFLAGS: "-Dwarnings"

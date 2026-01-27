@@ -99,6 +99,7 @@ struct D1ApiResponse {
 }
 
 /// D1 API error
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct D1ApiError {
     code: i32,
@@ -106,6 +107,7 @@ struct D1ApiError {
 }
 
 /// D1 query result
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct D1QueryResult {
     success: bool,
@@ -114,6 +116,7 @@ struct D1QueryResult {
 }
 
 /// D1 query metadata
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct D1QueryMeta {
     changes: Option<i64>,
@@ -179,7 +182,7 @@ impl D1HttpConnection {
 
         let response = self
             .client
-            .post(&self.config.query_url())
+            .post(self.config.query_url())
             .header("Authorization", format!("Bearer {}", self.config.api_token))
             .header("Content-Type", "application/json")
             .json(&request)
@@ -361,6 +364,7 @@ impl AsyncConnection for D1HttpConnection {
         &mut self.transaction_manager
     }
 
+    #[allow(static_mut_refs)]
     fn instrumentation(&mut self) -> &mut dyn Instrumentation {
         static mut NOOP: NoopInstrumentation = NoopInstrumentation;
         unsafe { &mut NOOP }

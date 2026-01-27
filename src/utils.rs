@@ -49,6 +49,7 @@ pub struct D1Error {
 
 impl D1Error {
     /// Create a new D1 error with the given message
+    #[allow(dead_code)]
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),

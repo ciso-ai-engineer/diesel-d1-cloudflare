@@ -43,6 +43,7 @@ use crate::{
 /// let conn = D1Connection::new(env, "MY_DATABASE");
 /// ```
 pub struct D1Connection {
+    #[allow(dead_code)]
     transaction_queries: Vec<D1PreparedStatement>,
     /// Transaction manager (public for TransactionManager trait access)
     pub(crate) transaction_manager: D1TransactionManager,
@@ -237,6 +238,7 @@ impl AsyncConnection for D1Connection {
         &mut self.transaction_manager
     }
 
+    #[allow(static_mut_refs)]
     fn instrumentation(&mut self) -> &mut dyn Instrumentation {
         // Return a no-op instrumentation
         static mut NOOP: NoopInstrumentation = NoopInstrumentation;

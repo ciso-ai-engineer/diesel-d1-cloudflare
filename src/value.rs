@@ -33,6 +33,7 @@ impl D1Value {
     /// # Panics
     ///
     /// Panics if the value is not a boolean
+    #[allow(dead_code)]
     pub(crate) fn read_bool(&self) -> bool {
         self._row.as_bool().unwrap_or(false)
     }
@@ -46,6 +47,7 @@ impl D1Value {
     }
 
     /// Check if the value is null or undefined
+    #[allow(dead_code)]
     pub(crate) fn is_null(&self) -> bool {
         self._row.is_null() || self._row.is_undefined()
     }

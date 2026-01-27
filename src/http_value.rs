@@ -30,6 +30,7 @@ impl D1Value {
     }
 
     /// Read the value as a boolean
+    #[allow(dead_code)]
     pub(crate) fn read_bool(&self) -> bool {
         match &self.value {
             JsonValue::Bool(b) => *b,
@@ -49,6 +50,7 @@ impl D1Value {
     }
 
     /// Check if the value is null
+    #[allow(dead_code)]
     pub(crate) fn is_null(&self) -> bool {
         self.value.is_null()
     }

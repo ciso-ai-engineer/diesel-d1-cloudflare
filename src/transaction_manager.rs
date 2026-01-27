@@ -59,6 +59,7 @@ impl D1TransactionManager {
 
 /// Trait for connections that support D1 transactions
 #[cfg(feature = "wasm")]
+#[allow(dead_code)]
 pub trait D1TransactionConnection {
     /// Get the transaction manager
     fn d1_transaction_manager(&mut self) -> &mut D1TransactionManager;
@@ -74,6 +75,7 @@ pub trait D1TransactionConnection {
 
 /// Trait for HTTP connections that support D1 transactions
 #[cfg(feature = "http")]
+#[allow(dead_code)]
 pub trait D1HttpTransactionConnection {
     /// Get the transaction manager
     fn d1_transaction_manager(&mut self) -> &mut D1TransactionManager;
