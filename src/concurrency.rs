@@ -134,10 +134,11 @@ impl QueryConcurrencyPolicy {
         }
     }
 
-    /// Acquire a permit, blocking if necessary (async version)
+    /// Acquire a permit, waiting asynchronously if necessary
     ///
-    /// This method will wait until a permit is available. It uses a simple
-    /// spin-wait strategy suitable for single-threaded WASM environments.
+    /// This method will yield to allow other tasks to make progress until
+    /// a permit becomes available. In single-threaded WASM environments,
+    /// this uses a cooperative yielding strategy.
     #[cfg(feature = "wasm")]
     pub async fn acquire(&self) -> ConcurrencyPermit {
         use std::future::Future;
@@ -172,7 +173,10 @@ impl QueryConcurrencyPolicy {
         }
     }
 
-    /// Acquire a permit, blocking if necessary (async version for HTTP)
+    /// Acquire a permit, waiting asynchronously if necessary
+    ///
+    /// This method uses a brief sleep to avoid busy-waiting while waiting
+    /// for a permit to become available.
     #[cfg(all(feature = "http", not(feature = "wasm")))]
     pub async fn acquire(&self) -> ConcurrencyPermit {
         use std::time::Duration;
