@@ -20,6 +20,9 @@ use std::time::Duration;
 /// Default maximum concurrent queries for the concurrency governor
 pub const DEFAULT_MAX_CONCURRENT_QUERIES: usize = 10;
 
+/// Default number of idle connections per host in the HTTP connection pool
+pub const DEFAULT_POOL_IDLE_CONNECTIONS: usize = 10;
+
 /// Default request timeout for HTTP transport
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -268,7 +271,7 @@ pub struct HttpTransportPolicy {
 impl Default for HttpTransportPolicy {
     fn default() -> Self {
         Self {
-            pool_idle_connections: DEFAULT_MAX_CONCURRENT_QUERIES,
+            pool_idle_connections: DEFAULT_POOL_IDLE_CONNECTIONS,
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
             retry_enabled: false, // Explicitly off by default
             max_retries: 3,
@@ -324,10 +327,16 @@ impl HttpTransportPolicy {
             .build()
     }
 
-    /// Create a concurrency-governed client.
+    /// Create a concurrency-governed client with a specified concurrency limit.
     ///
     /// Returns both a configured reqwest Client and a `QueryConcurrencyPolicy`
     /// that should be used to limit concurrent requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `concurrency_limit` - Optional maximum concurrent requests. If `None`,
+    ///   defaults to `DEFAULT_MAX_CONCURRENT_QUERIES`. This is independent of the
+    ///   connection pool size (`pool_idle_connections`), which controls connection reuse.
     ///
     /// # Example
     ///
@@ -335,10 +344,11 @@ impl HttpTransportPolicy {
     /// use diesel_d1::concurrency::HttpTransportPolicy;
     ///
     /// let policy = HttpTransportPolicy::builder()
-    ///     .pool_idle_connections(10)
+    ///     .pool_idle_connections(20)  // Connection pool size
     ///     .build();
     ///
-    /// let (client, governor) = policy.create_governed_client().unwrap();
+    /// // Create client with concurrency limit of 5 (independent of pool size)
+    /// let (client, governor) = policy.create_governed_client(Some(5)).unwrap();
     ///
     /// // Use governor to limit concurrent requests
     /// if let Some(permit) = governor.try_acquire() {
@@ -347,9 +357,11 @@ impl HttpTransportPolicy {
     /// ```
     pub fn create_governed_client(
         &self,
+        concurrency_limit: Option<usize>,
     ) -> Result<(reqwest::Client, QueryConcurrencyPolicy), reqwest::Error> {
         let client = self.create_client()?;
-        let governor = QueryConcurrencyPolicy::new(self.pool_idle_connections);
+        let limit = concurrency_limit.unwrap_or(DEFAULT_MAX_CONCURRENT_QUERIES);
+        let governor = QueryConcurrencyPolicy::new(limit);
         Ok((client, governor))
     }
 }
@@ -552,13 +564,23 @@ mod tests {
         #[test]
         fn test_http_transport_policy_create_governed_client() {
             let policy = HttpTransportPolicy::builder()
-                .pool_idle_connections(5)
+                .pool_idle_connections(20)
                 .build();
-            let result = policy.create_governed_client();
-            assert!(result.is_ok());
 
+            // Test with explicit concurrency limit
+            let result = policy.create_governed_client(Some(5));
+            assert!(result.is_ok());
             let (_client, governor) = result.unwrap();
             assert_eq!(governor.max_concurrent_queries(), 5);
+
+            // Test with default concurrency limit
+            let result = policy.create_governed_client(None);
+            assert!(result.is_ok());
+            let (_client, governor) = result.unwrap();
+            assert_eq!(
+                governor.max_concurrent_queries(),
+                DEFAULT_MAX_CONCURRENT_QUERIES
+            );
         }
     }
 }

@@ -108,13 +108,13 @@ use diesel_d1::HttpTransportPolicy;
 use std::time::Duration;
 
 let policy = HttpTransportPolicy::builder()
-    .pool_idle_connections(20)  // Connection pool size, not concurrency limit
+    .pool_idle_connections(20)  // Connection pool size for keep-alive reuse
     .request_timeout(Duration::from_secs(60))
     .retry_enabled(false)  // Off by default
     .build();
 
-// Create a governed client with both HTTP client and concurrency limiter
-let (client, governor) = policy.create_governed_client()?;
+// Create a governed client with explicit concurrency limit (independent of pool size)
+let (client, governor) = policy.create_governed_client(Some(5))?;
 
 // Use governor to enforce true concurrency limits
 if let Some(permit) = governor.try_acquire() {
