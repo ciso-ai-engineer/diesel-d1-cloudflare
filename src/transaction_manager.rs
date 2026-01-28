@@ -65,9 +65,7 @@ pub trait D1TransactionConnection {
     fn d1_transaction_manager(&mut self) -> &mut D1TransactionManager;
 
     /// Get the list of queued transaction queries
-    fn transaction_queries(
-        &mut self,
-    ) -> &mut Vec<crate::binding::D1PreparedStatement>;
+    fn transaction_queries(&mut self) -> &mut Vec<crate::binding::D1PreparedStatement>;
 
     /// Get the D1 binding for batch execution
     fn binding(&self) -> &crate::binding::D1Database;
@@ -89,9 +87,7 @@ pub trait D1HttpTransactionConnection {
 impl TransactionManager<crate::wasm_connection::D1Connection> for D1TransactionManager {
     type TransactionStateData = Self;
 
-    async fn begin_transaction(
-        conn: &mut crate::wasm_connection::D1Connection,
-    ) -> QueryResult<()> {
+    async fn begin_transaction(conn: &mut crate::wasm_connection::D1Connection) -> QueryResult<()> {
         let depth = conn.transaction_manager.depth.get();
         conn.transaction_manager.depth.set(depth + 1);
 

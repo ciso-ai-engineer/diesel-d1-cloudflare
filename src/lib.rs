@@ -8,6 +8,30 @@
 //! - `wasm` - Enable WASM bindings for Cloudflare Workers (requires wasm32 target)
 //! - `http` - Enable HTTP REST API backend for non-Workers environments
 //!
+//! ## Concurrency & "Pooling" Semantics
+//!
+//! **Important:** D1 Workers binding is **not** a socketed connection and cannot be pooled
+//! traditionally. The "pooling" abstractions in this crate are designed for:
+//!
+//! - **WASM (Workers)**: A lightweight concurrency governor (semaphore-based) to limit
+//!   simultaneous in-flight queries per isolate, preventing request amplification under load.
+//! - **HTTP**: Transport-level pooling using a shared `reqwest::Client` for HTTP keep-alive
+//!   and connection reuse, plus configurable request limits and timeouts.
+//!
+//! The D1 REST API is rate-limited at the Cloudflare API layer and is generally intended
+//! for "administrative use" rather than high-throughput production workloads.
+//!
+//! ## Statement Caching
+//!
+//! The crate provides best-effort client-side statement caching to reduce overhead for
+//! frequently executed SQL. Caching may reset on isolate eviction (WASM) or process restart.
+//!
+//! ## Batch Operations & Transactions
+//!
+//! D1's `batch()` API executes statements as a SQL transaction with automatic rollback on
+//! failure. This crate provides batch construction utilities that support prepared statement
+//! reuse across multiple binds.
+//!
 //! ## Usage
 //!
 //! ### WASM Backend (Cloudflare Workers)
@@ -31,6 +55,13 @@ mod transaction_manager;
 mod types;
 mod utils;
 
+// New feature modules
+pub mod batch;
+pub mod cache;
+pub mod concurrency;
+pub mod replay;
+pub mod tracing_support;
+
 // WASM-specific modules
 #[cfg(feature = "wasm")]
 mod binding;
@@ -53,8 +84,24 @@ mod http_value;
 pub use backend::D1Backend;
 pub use transaction_manager::D1TransactionManager;
 
+// Concurrency and caching re-exports
+pub use cache::{StatementCache, StatementCacheConfig};
+pub use concurrency::QueryConcurrencyPolicy;
+
+#[cfg(feature = "http")]
+pub use concurrency::HttpTransportPolicy;
+
+// Batch operations re-exports
+pub use batch::{BatchBuilder, BatchStatement, BoundValue};
+
+// Tracing re-exports
+pub use tracing_support::{D1Span, ErrorClass, SpanOperation};
+
+// Replay testing re-exports
+pub use replay::{ExpectedResult, TransactionTranscript, TranscriptStatement};
+
 #[cfg(feature = "wasm")]
 pub use wasm_connection::D1Connection;
 
 #[cfg(feature = "http")]
-pub use http_connection::{D1HttpConnection, D1HttpConfig};
+pub use http_connection::{D1HttpConfig, D1HttpConnection};

@@ -4,6 +4,137 @@
 
 use diesel::result::DatabaseErrorInformation;
 
+// Base64 encoding for HTTP feature
+#[cfg(feature = "http")]
+pub mod base64 {
+    //! Simple base64 encoder for HTTP transport
+    //!
+    //! This module provides a streaming base64 encoder that can be used
+    //! to encode binary data for transmission over HTTP.
+
+    use std::io::{Result, Write};
+
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    /// A streaming base64 encoder that writes encoded data to an underlying writer.
+    ///
+    /// The encoder buffers input in 3-byte chunks and outputs 4-byte base64
+    /// encoded chunks. Padding is automatically added when the encoder is dropped.
+    pub struct Base64Encoder<W: Write> {
+        writer: W,
+        buffer: [u8; 3],
+        buffer_len: usize,
+    }
+
+    impl<W: Write> Base64Encoder<W> {
+        /// Create a new base64 encoder that writes to the given writer.
+        pub fn new(writer: W) -> Self {
+            Self {
+                writer,
+                buffer: [0; 3],
+                buffer_len: 0,
+            }
+        }
+    }
+
+    impl<W: Write> Write for Base64Encoder<W> {
+        fn write(&mut self, buf: &[u8]) -> Result<usize> {
+            let mut written = 0;
+            for &byte in buf {
+                self.buffer[self.buffer_len] = byte;
+                self.buffer_len += 1;
+                written += 1;
+
+                if self.buffer_len == 3 {
+                    let out = [
+                        ALPHABET[(self.buffer[0] >> 2) as usize],
+                        ALPHABET[(((self.buffer[0] & 0x03) << 4) | (self.buffer[1] >> 4)) as usize],
+                        ALPHABET[(((self.buffer[1] & 0x0f) << 2) | (self.buffer[2] >> 6)) as usize],
+                        ALPHABET[(self.buffer[2] & 0x3f) as usize],
+                    ];
+                    self.writer.write_all(&out)?;
+                    self.buffer_len = 0;
+                }
+            }
+            Ok(written)
+        }
+
+        fn flush(&mut self) -> Result<()> {
+            self.writer.flush()
+        }
+    }
+
+    impl<W: Write> Drop for Base64Encoder<W> {
+        fn drop(&mut self) {
+            if self.buffer_len > 0 {
+                let out = match self.buffer_len {
+                    1 => [
+                        ALPHABET[(self.buffer[0] >> 2) as usize],
+                        ALPHABET[((self.buffer[0] & 0x03) << 4) as usize],
+                        b'=',
+                        b'=',
+                    ],
+                    2 => [
+                        ALPHABET[(self.buffer[0] >> 2) as usize],
+                        ALPHABET[(((self.buffer[0] & 0x03) << 4) | (self.buffer[1] >> 4)) as usize],
+                        ALPHABET[((self.buffer[1] & 0x0f) << 2) as usize],
+                        b'=',
+                    ],
+                    _ => return,
+                };
+                let _ = self.writer.write_all(&out);
+            }
+        }
+    }
+
+    /// Encode binary data to a base64 string.
+    ///
+    /// This is a convenience function that encodes the entire input at once.
+    pub fn encode(data: &[u8]) -> String {
+        use std::io::Write;
+        let mut encoded = Vec::new();
+        let mut encoder = Base64Encoder::new(&mut encoded);
+        let _ = encoder.write_all(data);
+        drop(encoder);
+        String::from_utf8(encoded).unwrap_or_default()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_encode_empty() {
+            assert_eq!(encode(b""), "");
+        }
+
+        #[test]
+        fn test_encode_hello() {
+            assert_eq!(encode(b"hello"), "aGVsbG8=");
+        }
+
+        #[test]
+        fn test_encode_hello_world() {
+            assert_eq!(encode(b"Hello World"), "SGVsbG8gV29ybGQ=");
+        }
+
+        #[test]
+        fn test_encode_single_byte() {
+            assert_eq!(encode(b"a"), "YQ==");
+        }
+
+        #[test]
+        fn test_encode_two_bytes() {
+            assert_eq!(encode(b"ab"), "YWI=");
+        }
+
+        #[test]
+        fn test_encode_three_bytes() {
+            assert_eq!(encode(b"abc"), "YWJj");
+        }
+    }
+}
+
 #[cfg(feature = "wasm")]
 use std::{
     future::Future,
