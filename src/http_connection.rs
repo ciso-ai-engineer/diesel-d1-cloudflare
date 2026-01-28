@@ -145,9 +145,15 @@ struct D1QueryMeta {
 /// ```
 pub struct D1HttpConnection {
     client: Client,
+    /// Connection configuration (visible for testing)
+    #[cfg(test)]
+    pub(crate) config: D1HttpConfig,
+    #[cfg(not(test))]
     config: D1HttpConfig,
     /// Transaction manager (public for TransactionManager trait access)
     pub(crate) transaction_manager: D1TransactionManager,
+    /// Instrumentation for the connection
+    instrumentation: Option<Box<dyn Instrumentation>>,
 }
 
 impl D1HttpConnection {
@@ -157,6 +163,7 @@ impl D1HttpConnection {
             client: Client::new(),
             config,
             transaction_manager: D1TransactionManager::default(),
+            instrumentation: None,
         }
     }
 
@@ -166,6 +173,7 @@ impl D1HttpConnection {
             client,
             config,
             transaction_manager: D1TransactionManager::default(),
+            instrumentation: None,
         }
     }
 
@@ -268,30 +276,41 @@ impl AsyncConnection for D1HttpConnection {
     async fn establish(database_url: &str) -> ConnectionResult<Self> {
         // Parse the database URL in format:
         // d1://account_id:api_token@database_id
-        // or use environment variables
+        // Note: api_token should be percent-encoded if it contains '@' or ':'
         if database_url.starts_with("d1://") {
-            let parts: Vec<&str> = database_url
-                .strip_prefix("d1://")
-                .unwrap()
-                .split('@')
-                .collect();
-
-            if parts.len() != 2 {
+            let url_body = database_url.strip_prefix("d1://").unwrap();
+            
+            // Find the last '@' to split auth from database_id
+            // This allows '@' characters in the token if percent-encoded
+            let at_pos = url_body.rfind('@');
+            if at_pos.is_none() {
                 return Err(diesel::ConnectionError::BadConnection(
                     "Invalid D1 URL format. Expected: d1://account_id:api_token@database_id"
                         .to_string(),
                 ));
             }
-
-            let auth_parts: Vec<&str> = parts[0].split(':').collect();
-            if auth_parts.len() != 2 {
+            
+            let at_pos = at_pos.unwrap();
+            let auth_part = &url_body[..at_pos];
+            let database_id = &url_body[at_pos + 1..];
+            
+            // Find the first ':' to split account_id from api_token
+            let colon_pos = auth_part.find(':');
+            if colon_pos.is_none() {
                 return Err(diesel::ConnectionError::BadConnection(
                     "Invalid D1 URL format. Expected: d1://account_id:api_token@database_id"
                         .to_string(),
                 ));
             }
+            
+            let colon_pos = colon_pos.unwrap();
+            let account_id = &auth_part[..colon_pos];
+            let api_token_encoded = &auth_part[colon_pos + 1..];
+            
+            // Decode percent-encoded characters in api_token
+            let api_token = percent_decode(api_token_encoded);
 
-            let config = D1HttpConfig::new(auth_parts[0], parts[1], auth_parts[1]);
+            let config = D1HttpConfig::new(account_id, database_id, &api_token);
             Ok(Self::new(config))
         } else {
             Err(diesel::ConnectionError::BadConnection(
@@ -318,9 +337,12 @@ impl AsyncConnection for D1HttpConnection {
             }
 
             // Get field names from first result
+            // Sort keys to ensure consistent field ordering regardless of JSON object iteration order
             let field_keys: Vec<String> = if let Some(first) = results.first() {
                 if let Some(obj) = first.as_object() {
-                    obj.keys().cloned().collect()
+                    let mut keys: Vec<String> = obj.keys().cloned().collect();
+                    keys.sort();
+                    keys
                 } else {
                     vec![]
                 }
@@ -364,14 +386,14 @@ impl AsyncConnection for D1HttpConnection {
         &mut self.transaction_manager
     }
 
-    #[allow(static_mut_refs)]
     fn instrumentation(&mut self) -> &mut dyn Instrumentation {
-        static mut NOOP: NoopInstrumentation = NoopInstrumentation;
-        unsafe { &mut NOOP }
+        self.instrumentation
+            .get_or_insert_with(|| Box::new(NoopInstrumentation))
+            .as_mut()
     }
 
-    fn set_instrumentation(&mut self, _instrumentation: impl Instrumentation) {
-        // No-op for now
+    fn set_instrumentation(&mut self, instrumentation: impl Instrumentation) {
+        self.instrumentation = Some(Box::new(instrumentation));
     }
 }
 
@@ -405,6 +427,31 @@ where
         .collect();
 
     (query_builder.sql, params)
+}
+
+/// Simple percent-decode for URL parsing
+fn percent_decode(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if hex.len() == 2 {
+                if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                    result.push(byte as char);
+                    continue;
+                }
+            }
+            // If decoding failed, keep original
+            result.push('%');
+            result.push_str(&hex);
+        } else {
+            result.push(c);
+        }
+    }
+    
+    result
 }
 
 #[cfg(test)]
@@ -452,5 +499,26 @@ mod tests {
     async fn test_establish_malformed_url() {
         let result = D1HttpConnection::establish("d1://missing-at-sign").await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_percent_decode_simple() {
+        assert_eq!(percent_decode("hello"), "hello");
+        assert_eq!(percent_decode("hello%20world"), "hello world");
+    }
+
+    #[test]
+    fn test_percent_decode_special_chars() {
+        assert_eq!(percent_decode("token%40example"), "token@example");
+        assert_eq!(percent_decode("a%3Ab"), "a:b");
+    }
+
+    #[tokio::test]
+    async fn test_establish_url_with_encoded_token() {
+        // Token with @ and : characters encoded
+        let result = D1HttpConnection::establish("d1://account:token%40with%3Aspecial@database").await;
+        assert!(result.is_ok());
+        let conn = result.unwrap();
+        assert_eq!(conn.config.api_token, "token@with:special");
     }
 }

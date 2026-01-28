@@ -21,14 +21,14 @@ impl D1Value {
 
     /// Read the value as a string
     ///
-    /// Returns an empty string if the value is not a string.
+    /// Note: Returns an empty string for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_string(&self) -> String {
         self._row.as_string().unwrap_or_default()
     }
 
     /// Read the value as a boolean
     ///
-    /// Returns `false` if the value is not a boolean.
+    /// Note: Returns `false` for NULL values. Use `is_null()` to check for NULL.
     #[allow(dead_code)]
     pub(crate) fn read_bool(&self) -> bool {
         self._row.as_bool().unwrap_or(false)
@@ -38,19 +38,20 @@ impl D1Value {
     ///
     /// Note: JS numbers are always f64, which might cause precision issues
     /// when crossing boundaries with i64.
+    /// Note: Returns 0.0 for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_number(&self) -> f64 {
         self._row.as_f64().unwrap_or(0.0)
     }
 
     /// Check if the value is null or undefined
-    #[allow(dead_code)]
     pub(crate) fn is_null(&self) -> bool {
         self._row.is_null() || self._row.is_undefined()
     }
 
     /// Read the value as a blob (binary data)
     ///
-    /// Returns an empty Vec if the value is not a Uint8Array.
+    /// Note: Returns an empty Vec for NULL values or non-Uint8Array types.
+    /// Use `is_null()` to check for NULL.
     pub(crate) fn read_blob(&self) -> Vec<u8> {
         if !self._row.is_instance_of::<Uint8Array>() {
             return Vec::new();

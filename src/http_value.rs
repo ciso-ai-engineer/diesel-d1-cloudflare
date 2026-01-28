@@ -19,6 +19,8 @@ impl D1Value {
     }
 
     /// Read the value as a string
+    /// 
+    /// Note: Returns an empty string for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_string(&self) -> String {
         match &self.value {
             JsonValue::String(s) => s.clone(),
@@ -30,6 +32,8 @@ impl D1Value {
     }
 
     /// Read the value as a boolean
+    /// 
+    /// Note: Returns false for NULL values. Use `is_null()` to check for NULL.
     #[allow(dead_code)]
     pub(crate) fn read_bool(&self) -> bool {
         match &self.value {
@@ -40,6 +44,8 @@ impl D1Value {
     }
 
     /// Read the value as a number (f64)
+    /// 
+    /// Note: Returns 0.0 for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_number(&self) -> f64 {
         match &self.value {
             JsonValue::Number(n) => n.as_f64().unwrap_or(0.0),
@@ -50,14 +56,14 @@ impl D1Value {
     }
 
     /// Check if the value is null
-    #[allow(dead_code)]
     pub(crate) fn is_null(&self) -> bool {
         self.value.is_null()
     }
 
     /// Read the value as a blob (binary data)
     ///
-    /// Expects the value to be a base64-encoded string
+    /// Expects the value to be a base64-encoded string.
+    /// Note: Returns empty Vec for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_blob(&self) -> Vec<u8> {
         match &self.value {
             JsonValue::String(s) => {

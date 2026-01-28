@@ -68,9 +68,13 @@ impl BindValue {
                 use std::io::Write;
                 let mut encoded = Vec::new();
                 let mut encoder = base64_encode::Base64Encoder::new(&mut encoded);
-                encoder.write_all(b).ok();
+                encoder
+                    .write_all(b)
+                    .expect("failed to write to base64 encoder");
                 drop(encoder);
-                serde_json::Value::String(String::from_utf8_lossy(&encoded).to_string())
+                let encoded_str = String::from_utf8(encoded)
+                    .expect("base64 encoder produced non-UTF-8 output");
+                serde_json::Value::String(encoded_str)
             }
         }
     }

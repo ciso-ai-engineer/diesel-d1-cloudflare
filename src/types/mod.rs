@@ -177,6 +177,8 @@ impl ToSql<sql_types::Text, D1Backend> for str {
     }
 }
 
+// Note: String ToSql is provided by Diesel's blanket impl when str ToSql is implemented
+
 // Blob/Binary
 impl HasSqlType<sql_types::Binary> for D1Backend {
     fn metadata(_lookup: &mut ()) -> D1Type {
@@ -198,6 +200,8 @@ impl ToSql<sql_types::Binary, D1Backend> for [u8] {
         Ok(IsNull::No)
     }
 }
+
+// Note: Vec<u8> ToSql is provided by Diesel's blanket impl when [u8] ToSql is implemented
 
 // Time-related types (stored as text in SQLite/D1)
 impl HasSqlType<sql_types::Date> for D1Backend {

@@ -48,6 +48,8 @@ pub struct D1Connection {
     /// Transaction manager (public for TransactionManager trait access)
     pub(crate) transaction_manager: D1TransactionManager,
     binding: D1Database,
+    /// Instrumentation for the connection
+    instrumentation: Option<Box<dyn Instrumentation>>,
 }
 
 impl D1Connection {
@@ -63,6 +65,7 @@ impl D1Connection {
             transaction_queries: Vec::default(),
             transaction_manager: D1TransactionManager::default(),
             binding,
+            instrumentation: None,
         }
     }
 
@@ -238,15 +241,14 @@ impl AsyncConnection for D1Connection {
         &mut self.transaction_manager
     }
 
-    #[allow(static_mut_refs)]
     fn instrumentation(&mut self) -> &mut dyn Instrumentation {
-        // Return a no-op instrumentation
-        static mut NOOP: NoopInstrumentation = NoopInstrumentation;
-        unsafe { &mut NOOP }
+        self.instrumentation
+            .get_or_insert_with(|| Box::new(NoopInstrumentation))
+            .as_mut()
     }
 
-    fn set_instrumentation(&mut self, _instrumentation: impl Instrumentation) {
-        // No-op for now
+    fn set_instrumentation(&mut self, instrumentation: impl Instrumentation) {
+        self.instrumentation = Some(Box::new(instrumentation));
     }
 }
 
