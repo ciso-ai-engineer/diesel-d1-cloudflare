@@ -7,6 +7,11 @@ license-file = "LICENSE"
 homepage = "https://github.com/LuisDuarte1/diesel-d1"
 description = "A Diesel Backend/Connection for Cloudflare D1."
 
+[features]
+default = []
+wasm = ["dep:js-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:worker"]
+http = ["dep:reqwest", "dep:serde", "dep:serde_json", "dep:tokio"]
+
 [dependencies]
 async-trait = "0.1.83"
 diesel = { version = "2.2.6", features = [
@@ -14,7 +19,18 @@ diesel = { version = "2.2.6", features = [
 ] }
 diesel-async = "0.5.2"
 futures-util = "0.3.31"
-js-sys = "0.3.74"
-wasm-bindgen = "0.2.97"
-wasm-bindgen-futures = "0.4.49"
-worker = { version = "0.4.2"}
+
+# WASM dependencies (optional)
+js-sys = { version = "0.3.74", optional = true }
+wasm-bindgen = { version = "0.2.97", optional = true }
+wasm-bindgen-futures = { version = "0.4.49", optional = true }
+worker = { version = "0.4.2", optional = true }
+
+# HTTP dependencies (optional)
+reqwest = { version = "0.11", features = ["json"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+tokio = { version = "1.0", features = ["rt", "net", "io-util"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
