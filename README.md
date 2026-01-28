@@ -255,7 +255,6 @@ See the `examples/` directory for complete examples:
 
 ## Roadmap
 
-* Connection pooling
 * Statement caching
 * Prepared query reuse
 * Tracing + OpenTelemetry spans
