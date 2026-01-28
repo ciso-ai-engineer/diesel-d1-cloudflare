@@ -232,6 +232,10 @@ impl Drop for ConcurrencyPermit {
 /// This policy controls transport-level settings for the HTTP backend,
 /// enabling HTTP keep-alive and connection reuse (transport pooling).
 ///
+/// **Note:** The `pool_idle_connections` setting configures the connection pool's
+/// idle connection limit, not a concurrency cap. To enforce true request concurrency
+/// limits, use a `QueryConcurrencyPolicy` alongside this transport policy.
+///
 /// # Example
 ///
 /// ```
@@ -239,15 +243,17 @@ impl Drop for ConcurrencyPermit {
 /// use std::time::Duration;
 ///
 /// let policy = HttpTransportPolicy::builder()
-///     .max_in_flight_requests(20)
+///     .pool_idle_connections(20)
 ///     .request_timeout(Duration::from_secs(60))
 ///     .build();
 /// ```
 #[cfg(feature = "http")]
 #[derive(Debug, Clone)]
 pub struct HttpTransportPolicy {
-    /// Maximum number of in-flight HTTP requests
-    max_in_flight_requests: usize,
+    /// Maximum number of idle connections per host in the connection pool.
+    /// This configures keep-alive connection reuse, NOT a concurrency limit.
+    /// Use `QueryConcurrencyPolicy` for actual request concurrency control.
+    pool_idle_connections: usize,
     /// Request timeout duration
     request_timeout: Duration,
     /// Whether retry/backoff is enabled (off by default)
@@ -262,7 +268,7 @@ pub struct HttpTransportPolicy {
 impl Default for HttpTransportPolicy {
     fn default() -> Self {
         Self {
-            max_in_flight_requests: DEFAULT_MAX_CONCURRENT_QUERIES,
+            pool_idle_connections: DEFAULT_MAX_CONCURRENT_QUERIES,
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
             retry_enabled: false, // Explicitly off by default
             max_retries: 3,
@@ -278,9 +284,13 @@ impl HttpTransportPolicy {
         HttpTransportPolicyBuilder::default()
     }
 
-    /// Get the maximum number of in-flight requests
-    pub fn max_in_flight_requests(&self) -> usize {
-        self.max_in_flight_requests
+    /// Get the maximum number of idle connections per host.
+    ///
+    /// This controls connection pool sizing for keep-alive reuse,
+    /// NOT the number of concurrent requests. Use `QueryConcurrencyPolicy`
+    /// for actual concurrency limits.
+    pub fn pool_idle_connections(&self) -> usize {
+        self.pool_idle_connections
     }
 
     /// Get the request timeout duration
@@ -303,12 +313,44 @@ impl HttpTransportPolicy {
         self.retry_base_delay
     }
 
-    /// Create a configured reqwest Client based on this policy
+    /// Create a configured reqwest Client based on this policy.
+    ///
+    /// **Note:** The returned client does not enforce request concurrency limits.
+    /// Use a `QueryConcurrencyPolicy` to limit concurrent in-flight requests.
     pub fn create_client(&self) -> Result<reqwest::Client, reqwest::Error> {
         reqwest::Client::builder()
             .timeout(self.request_timeout)
-            .pool_max_idle_per_host(self.max_in_flight_requests)
+            .pool_max_idle_per_host(self.pool_idle_connections)
             .build()
+    }
+
+    /// Create a concurrency-governed client.
+    ///
+    /// Returns both a configured reqwest Client and a `QueryConcurrencyPolicy`
+    /// that should be used to limit concurrent requests.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use diesel_d1::concurrency::HttpTransportPolicy;
+    ///
+    /// let policy = HttpTransportPolicy::builder()
+    ///     .pool_idle_connections(10)
+    ///     .build();
+    ///
+    /// let (client, governor) = policy.create_governed_client().unwrap();
+    ///
+    /// // Use governor to limit concurrent requests
+    /// if let Some(permit) = governor.try_acquire() {
+    ///     // Make request with client while holding permit
+    /// }
+    /// ```
+    pub fn create_governed_client(
+        &self,
+    ) -> Result<(reqwest::Client, QueryConcurrencyPolicy), reqwest::Error> {
+        let client = self.create_client()?;
+        let governor = QueryConcurrencyPolicy::new(self.pool_idle_connections);
+        Ok((client, governor))
     }
 }
 
@@ -316,7 +358,7 @@ impl HttpTransportPolicy {
 #[cfg(feature = "http")]
 #[derive(Debug, Default)]
 pub struct HttpTransportPolicyBuilder {
-    max_in_flight_requests: Option<usize>,
+    pool_idle_connections: Option<usize>,
     request_timeout: Option<Duration>,
     retry_enabled: Option<bool>,
     max_retries: Option<u32>,
@@ -325,9 +367,13 @@ pub struct HttpTransportPolicyBuilder {
 
 #[cfg(feature = "http")]
 impl HttpTransportPolicyBuilder {
-    /// Set the maximum number of in-flight HTTP requests
-    pub fn max_in_flight_requests(mut self, max: usize) -> Self {
-        self.max_in_flight_requests = Some(max);
+    /// Set the maximum number of idle connections per host in the connection pool.
+    ///
+    /// This configures keep-alive connection reuse for better performance,
+    /// but does NOT limit concurrent requests. Use `QueryConcurrencyPolicy`
+    /// for actual concurrency control.
+    pub fn pool_idle_connections(mut self, max: usize) -> Self {
+        self.pool_idle_connections = Some(max);
         self
     }
 
@@ -359,9 +405,9 @@ impl HttpTransportPolicyBuilder {
     pub fn build(self) -> HttpTransportPolicy {
         let default = HttpTransportPolicy::default();
         HttpTransportPolicy {
-            max_in_flight_requests: self
-                .max_in_flight_requests
-                .unwrap_or(default.max_in_flight_requests),
+            pool_idle_connections: self
+                .pool_idle_connections
+                .unwrap_or(default.pool_idle_connections),
             request_timeout: self.request_timeout.unwrap_or(default.request_timeout),
             retry_enabled: self.retry_enabled.unwrap_or(default.retry_enabled),
             max_retries: self.max_retries.unwrap_or(default.max_retries),
@@ -472,7 +518,7 @@ mod tests {
         fn test_http_transport_policy_default() {
             let policy = HttpTransportPolicy::default();
             assert_eq!(
-                policy.max_in_flight_requests(),
+                policy.pool_idle_connections(),
                 DEFAULT_MAX_CONCURRENT_QUERIES
             );
             assert_eq!(policy.request_timeout(), DEFAULT_REQUEST_TIMEOUT);
@@ -482,14 +528,14 @@ mod tests {
         #[test]
         fn test_http_transport_policy_builder() {
             let policy = HttpTransportPolicy::builder()
-                .max_in_flight_requests(20)
+                .pool_idle_connections(20)
                 .request_timeout(Duration::from_secs(60))
                 .retry_enabled(true)
                 .max_retries(5)
                 .retry_base_delay(Duration::from_millis(200))
                 .build();
 
-            assert_eq!(policy.max_in_flight_requests(), 20);
+            assert_eq!(policy.pool_idle_connections(), 20);
             assert_eq!(policy.request_timeout(), Duration::from_secs(60));
             assert!(policy.retry_enabled());
             assert_eq!(policy.max_retries(), 5);
@@ -501,6 +547,18 @@ mod tests {
             let policy = HttpTransportPolicy::default();
             let client = policy.create_client();
             assert!(client.is_ok());
+        }
+
+        #[test]
+        fn test_http_transport_policy_create_governed_client() {
+            let policy = HttpTransportPolicy::builder()
+                .pool_idle_connections(5)
+                .build();
+            let result = policy.create_governed_client();
+            assert!(result.is_ok());
+
+            let (_client, governor) = result.unwrap();
+            assert_eq!(governor.max_concurrent_queries(), 5);
         }
     }
 }

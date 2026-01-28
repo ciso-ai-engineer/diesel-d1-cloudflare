@@ -62,91 +62,9 @@ impl BindValue {
                 .unwrap_or(serde_json::Value::Null),
             BindValue::Text(s) => serde_json::Value::String(s.clone()),
             BindValue::Binary(b) => {
-                // Encode as base64 for HTTP transport
-                use std::io::Write;
-                let mut encoded = Vec::new();
-                let mut encoder = base64_encode::Base64Encoder::new(&mut encoded);
-                encoder
-                    .write_all(b)
-                    .expect("failed to write to base64 encoder");
-                drop(encoder);
-                let encoded_str =
-                    String::from_utf8(encoded).expect("base64 encoder produced non-UTF-8 output");
+                // Encode as base64 for HTTP transport using shared utility
+                let encoded_str = crate::utils::base64::encode(b);
                 serde_json::Value::String(encoded_str)
-            }
-        }
-    }
-}
-
-// Simple base64 encoder for HTTP feature
-#[cfg(feature = "http")]
-mod base64_encode {
-    use std::io::{Result, Write};
-
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    pub struct Base64Encoder<W: Write> {
-        writer: W,
-        buffer: [u8; 3],
-        buffer_len: usize,
-    }
-
-    impl<W: Write> Base64Encoder<W> {
-        pub fn new(writer: W) -> Self {
-            Self {
-                writer,
-                buffer: [0; 3],
-                buffer_len: 0,
-            }
-        }
-    }
-
-    impl<W: Write> Write for Base64Encoder<W> {
-        fn write(&mut self, buf: &[u8]) -> Result<usize> {
-            let mut written = 0;
-            for &byte in buf {
-                self.buffer[self.buffer_len] = byte;
-                self.buffer_len += 1;
-                written += 1;
-
-                if self.buffer_len == 3 {
-                    let out = [
-                        ALPHABET[(self.buffer[0] >> 2) as usize],
-                        ALPHABET[(((self.buffer[0] & 0x03) << 4) | (self.buffer[1] >> 4)) as usize],
-                        ALPHABET[(((self.buffer[1] & 0x0f) << 2) | (self.buffer[2] >> 6)) as usize],
-                        ALPHABET[(self.buffer[2] & 0x3f) as usize],
-                    ];
-                    self.writer.write_all(&out)?;
-                    self.buffer_len = 0;
-                }
-            }
-            Ok(written)
-        }
-
-        fn flush(&mut self) -> Result<()> {
-            self.writer.flush()
-        }
-    }
-
-    impl<W: Write> Drop for Base64Encoder<W> {
-        fn drop(&mut self) {
-            if self.buffer_len > 0 {
-                let out = match self.buffer_len {
-                    1 => [
-                        ALPHABET[(self.buffer[0] >> 2) as usize],
-                        ALPHABET[((self.buffer[0] & 0x03) << 4) as usize],
-                        b'=',
-                        b'=',
-                    ],
-                    2 => [
-                        ALPHABET[(self.buffer[0] >> 2) as usize],
-                        ALPHABET[(((self.buffer[0] & 0x03) << 4) | (self.buffer[1] >> 4)) as usize],
-                        ALPHABET[((self.buffer[1] & 0x0f) << 2) as usize],
-                        b'=',
-                    ],
-                    _ => return,
-                };
-                let _ = self.writer.write_all(&out);
             }
         }
     }

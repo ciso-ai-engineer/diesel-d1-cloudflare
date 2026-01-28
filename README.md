@@ -108,13 +108,18 @@ use diesel_d1::HttpTransportPolicy;
 use std::time::Duration;
 
 let policy = HttpTransportPolicy::builder()
-    .max_in_flight_requests(20)
+    .pool_idle_connections(20)  // Connection pool size, not concurrency limit
     .request_timeout(Duration::from_secs(60))
     .retry_enabled(false)  // Off by default
     .build();
 
-// Create a configured reqwest client
-let client = policy.create_client()?;
+// Create a governed client with both HTTP client and concurrency limiter
+let (client, governor) = policy.create_governed_client()?;
+
+// Use governor to enforce true concurrency limits
+if let Some(permit) = governor.try_acquire() {
+    // Make request with client while holding permit
+}
 ```
 
 ---
