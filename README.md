@@ -136,12 +136,6 @@ The `examples/` directory contains:
 
 ---
 
-## License
-
-Apache 2.0
-
----
-
 ## Why This Exists
 
 The original `diesel-d1` was handy for some specific WASM, but until now:
@@ -166,3 +160,9 @@ This project turns D1 into a **real distributed SQL backend** usable across:
 - [x] make it more SQLite compatible
 - [x] HTTP API (and allow other targets that do not use WASM)
 - [ ] Durable Object sync SQLite support
+
+---
+
+## License
+
+Apache 2.0
