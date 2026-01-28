@@ -1,5 +1,3 @@
-# diesel-d1-cloudflare
-
 ![Diesel D1](./diesel-d1-cloudflare.jpg)
 
 A production-grade extension of `diesel-d1` that enables **Cloudflare D1 access outside Workers via the HTTP REST API**, and adds **full transaction support with nested depth tracking**.
