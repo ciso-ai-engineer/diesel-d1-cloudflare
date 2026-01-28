@@ -31,8 +31,11 @@ impl RowSealed for D1Row {}
 
 impl<'stmt> Row<'stmt, D1Backend> for D1Row {
     type Field<'f>
-    = D1Field<'f> where 'stmt: 'f, Self: 'f;
-    
+        = D1Field<'f>
+    where
+        'stmt: 'f,
+        Self: 'f;
+
     type InnerPartialRow = Self;
 
     fn field_count(&self) -> usize {

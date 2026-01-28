@@ -36,7 +36,11 @@ impl D1Row {
 impl RowSealed for D1Row {}
 
 impl<'stmt> Row<'stmt, D1Backend> for D1Row {
-    type Field<'f> = D1Field<'f> where 'stmt: 'f, Self: 'f;
+    type Field<'f>
+        = D1Field<'f>
+    where
+        'stmt: 'f,
+        Self: 'f;
     type InnerPartialRow = Self;
 
     fn field_count(&self) -> usize {
@@ -142,10 +146,10 @@ mod tests {
             json!({"id": 1, "name": "test"}),
             vec!["id".to_string(), "name".to_string()],
         );
-        
+
         let field = row.get(0usize).unwrap();
         assert_eq!(field.field_name(), Some("id"));
-        
+
         let value = field.value().unwrap();
         assert!((value.read_number() - 1.0).abs() < f64::EPSILON);
     }

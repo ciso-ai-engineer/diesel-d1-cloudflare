@@ -19,7 +19,7 @@ impl D1Value {
     }
 
     /// Read the value as a string
-    /// 
+    ///
     /// Note: Returns an empty string for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_string(&self) -> String {
         match &self.value {
@@ -32,7 +32,7 @@ impl D1Value {
     }
 
     /// Read the value as a boolean
-    /// 
+    ///
     /// Note: Returns false for NULL values. Use `is_null()` to check for NULL.
     #[allow(dead_code)]
     pub(crate) fn read_bool(&self) -> bool {
@@ -44,18 +44,25 @@ impl D1Value {
     }
 
     /// Read the value as a number (f64)
-    /// 
+    ///
     /// Note: Returns 0.0 for NULL values. Use `is_null()` to check for NULL.
     pub(crate) fn read_number(&self) -> f64 {
         match &self.value {
             JsonValue::Number(n) => n.as_f64().unwrap_or(0.0),
             JsonValue::String(s) => s.parse().unwrap_or(0.0),
-            JsonValue::Bool(b) => if *b { 1.0 } else { 0.0 },
+            JsonValue::Bool(b) => {
+                if *b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             _ => 0.0,
         }
     }
 
     /// Check if the value is null
+    #[allow(dead_code)]
     pub(crate) fn is_null(&self) -> bool {
         self.value.is_null()
     }

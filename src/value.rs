@@ -44,6 +44,7 @@ impl D1Value {
     }
 
     /// Check if the value is null or undefined
+    #[allow(dead_code)]
     pub(crate) fn is_null(&self) -> bool {
         self._row.is_null() || self._row.is_undefined()
     }

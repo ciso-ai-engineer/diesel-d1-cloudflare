@@ -19,12 +19,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    backend::D1Backend,
-    bind_collector::D1BindCollector,
-    http_row::D1Row,
-    query_builder::D1QueryBuilder,
-    transaction_manager::D1TransactionManager,
-    utils::D1Error,
+    backend::D1Backend, bind_collector::D1BindCollector, http_row::D1Row,
+    query_builder::D1QueryBuilder, transaction_manager::D1TransactionManager, utils::D1Error,
 };
 
 /// Configuration for D1 HTTP API connection
@@ -211,10 +207,7 @@ impl D1HttpConnection {
         if !status.is_success() {
             return Err(diesel::result::Error::DatabaseError(
                 diesel::result::DatabaseErrorKind::Unknown,
-                Box::new(D1Error::new(format!(
-                    "HTTP error {}: {}",
-                    status, body
-                ))),
+                Box::new(D1Error::new(format!("HTTP error {}: {}", status, body))),
             ));
         }
 
@@ -276,7 +269,7 @@ impl AsyncConnection for D1HttpConnection {
         // Note: api_token should be percent-encoded if it contains '@' or ':'
         if database_url.starts_with("d1://") {
             let url_body = database_url.strip_prefix("d1://").unwrap();
-            
+
             // Find the last '@' to split auth from database_id
             // This allows '@' characters in the token if percent-encoded
             let at_pos = url_body.rfind('@');
@@ -286,11 +279,11 @@ impl AsyncConnection for D1HttpConnection {
                         .to_string(),
                 ));
             }
-            
+
             let at_pos = at_pos.unwrap();
             let auth_part = &url_body[..at_pos];
             let database_id = &url_body[at_pos + 1..];
-            
+
             // Find the first ':' to split account_id from api_token
             let colon_pos = auth_part.find(':');
             if colon_pos.is_none() {
@@ -299,11 +292,11 @@ impl AsyncConnection for D1HttpConnection {
                         .to_string(),
                 ));
             }
-            
+
             let colon_pos = colon_pos.unwrap();
             let account_id = &auth_part[..colon_pos];
             let api_token_encoded = &auth_part[colon_pos + 1..];
-            
+
             // Decode percent-encoded characters in api_token
             let api_token = percent_decode(api_token_encoded);
 
@@ -386,10 +379,7 @@ impl AsyncConnection for D1HttpConnection {
         async move {
             let result = self.execute_query(&sql, params).await?;
 
-            let changes = result
-                .meta
-                .and_then(|m| m.changes)
-                .unwrap_or(0);
+            let changes = result.meta.and_then(|m| m.changes).unwrap_or(0);
 
             Ok(changes as usize)
         }
@@ -448,7 +438,7 @@ where
 fn percent_decode(input: &str) -> String {
     let mut bytes = Vec::with_capacity(input.len());
     let mut chars = input.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '%' {
             let hex: String = chars.by_ref().take(2).collect();
@@ -467,7 +457,7 @@ fn percent_decode(input: &str) -> String {
             bytes.extend(c.encode_utf8(&mut buf).as_bytes());
         }
     }
-    
+
     // Convert to string, replacing invalid UTF-8 sequences
     String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
@@ -536,17 +526,17 @@ mod tests {
         // Incomplete sequence at end
         assert_eq!(percent_decode("test%2"), "test%2");
         assert_eq!(percent_decode("test%"), "test%");
-        
+
         // Invalid hex digits
         assert_eq!(percent_decode("test%GG"), "test%GG");
         assert_eq!(percent_decode("test%2G"), "test%2G");
-        
+
         // Empty string
         assert_eq!(percent_decode(""), "");
-        
+
         // Only percent sign
         assert_eq!(percent_decode("%"), "%");
-        
+
         // UTF-8 sequences
         assert_eq!(percent_decode("%C3%A9"), "é");
     }
@@ -554,7 +544,8 @@ mod tests {
     #[tokio::test]
     async fn test_establish_url_with_encoded_token() {
         // Token with @ and : characters encoded
-        let result = D1HttpConnection::establish("d1://account:token%40with%3Aspecial@database").await;
+        let result =
+            D1HttpConnection::establish("d1://account:token%40with%3Aspecial@database").await;
         assert!(result.is_ok());
         let conn = result.unwrap();
         assert_eq!(conn.config.api_token, "token@with:special");
@@ -565,11 +556,11 @@ mod tests {
         // Empty account_id
         let result = D1HttpConnection::establish("d1://:token@database").await;
         assert!(result.is_err());
-        
+
         // Empty database_id
         let result = D1HttpConnection::establish("d1://account:token@").await;
         assert!(result.is_err());
-        
+
         // Empty api_token
         let result = D1HttpConnection::establish("d1://account:@database").await;
         assert!(result.is_err());

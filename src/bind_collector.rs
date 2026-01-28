@@ -57,11 +57,9 @@ impl BindValue {
         match self {
             BindValue::Null => serde_json::Value::Null,
             BindValue::Integer(i) => serde_json::Value::Number((*i).into()),
-            BindValue::Double(d) => {
-                serde_json::Number::from_f64(*d)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
-            }
+            BindValue::Double(d) => serde_json::Number::from_f64(*d)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
             BindValue::Text(s) => serde_json::Value::String(s.clone()),
             BindValue::Binary(b) => {
                 // Encode as base64 for HTTP transport
@@ -72,8 +70,8 @@ impl BindValue {
                     .write_all(b)
                     .expect("failed to write to base64 encoder");
                 drop(encoder);
-                let encoded_str = String::from_utf8(encoded)
-                    .expect("base64 encoder produced non-UTF-8 output");
+                let encoded_str =
+                    String::from_utf8(encoded).expect("base64 encoder produced non-UTF-8 output");
                 serde_json::Value::String(encoded_str)
             }
         }
