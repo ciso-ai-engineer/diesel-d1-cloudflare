@@ -145,11 +145,8 @@ struct D1QueryMeta {
 /// ```
 pub struct D1HttpConnection {
     client: Client,
-    /// Connection configuration (visible for testing)
-    #[cfg(test)]
+    /// Connection configuration
     pub(crate) config: D1HttpConfig,
-    #[cfg(not(test))]
-    config: D1HttpConfig,
     /// Transaction manager (public for TransactionManager trait access)
     pub(crate) transaction_manager: D1TransactionManager,
     /// Instrumentation for the connection
@@ -310,6 +307,23 @@ impl AsyncConnection for D1HttpConnection {
             // Decode percent-encoded characters in api_token
             let api_token = percent_decode(api_token_encoded);
 
+            // Validate that all required fields are non-empty
+            if account_id.is_empty() {
+                return Err(diesel::ConnectionError::BadConnection(
+                    "account_id cannot be empty in D1 URL".to_string(),
+                ));
+            }
+            if database_id.is_empty() {
+                return Err(diesel::ConnectionError::BadConnection(
+                    "database_id cannot be empty in D1 URL".to_string(),
+                ));
+            }
+            if api_token.is_empty() {
+                return Err(diesel::ConnectionError::BadConnection(
+                    "api_token cannot be empty in D1 URL".to_string(),
+                ));
+            }
+
             let config = D1HttpConfig::new(account_id, database_id, &api_token);
             Ok(Self::new(config))
         } else {
@@ -430,8 +444,9 @@ where
 }
 
 /// Simple percent-decode for URL parsing
+/// Handles ASCII percent-encoding (sufficient for API tokens which are typically alphanumeric with some symbols)
 fn percent_decode(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
+    let mut bytes = Vec::with_capacity(input.len());
     let mut chars = input.chars().peekable();
     
     while let Some(c) = chars.next() {
@@ -439,19 +454,22 @@ fn percent_decode(input: &str) -> String {
             let hex: String = chars.by_ref().take(2).collect();
             if hex.len() == 2 {
                 if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                    result.push(byte as char);
+                    bytes.push(byte);
                     continue;
                 }
             }
-            // If decoding failed, keep original
-            result.push('%');
-            result.push_str(&hex);
+            // If decoding failed, keep original sequence as bytes
+            bytes.push(b'%');
+            bytes.extend(hex.as_bytes());
         } else {
-            result.push(c);
+            // For ASCII characters, this is safe; for UTF-8, push the bytes
+            let mut buf = [0u8; 4];
+            bytes.extend(c.encode_utf8(&mut buf).as_bytes());
         }
     }
     
-    result
+    // Convert to string, replacing invalid UTF-8 sequences
+    String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
 #[cfg(test)]
@@ -513,6 +531,26 @@ mod tests {
         assert_eq!(percent_decode("a%3Ab"), "a:b");
     }
 
+    #[test]
+    fn test_percent_decode_edge_cases() {
+        // Incomplete sequence at end
+        assert_eq!(percent_decode("test%2"), "test%2");
+        assert_eq!(percent_decode("test%"), "test%");
+        
+        // Invalid hex digits
+        assert_eq!(percent_decode("test%GG"), "test%GG");
+        assert_eq!(percent_decode("test%2G"), "test%2G");
+        
+        // Empty string
+        assert_eq!(percent_decode(""), "");
+        
+        // Only percent sign
+        assert_eq!(percent_decode("%"), "%");
+        
+        // UTF-8 sequences
+        assert_eq!(percent_decode("%C3%A9"), "é");
+    }
+
     #[tokio::test]
     async fn test_establish_url_with_encoded_token() {
         // Token with @ and : characters encoded
@@ -520,5 +558,20 @@ mod tests {
         assert!(result.is_ok());
         let conn = result.unwrap();
         assert_eq!(conn.config.api_token, "token@with:special");
+    }
+
+    #[tokio::test]
+    async fn test_establish_url_with_empty_fields() {
+        // Empty account_id
+        let result = D1HttpConnection::establish("d1://:token@database").await;
+        assert!(result.is_err());
+        
+        // Empty database_id
+        let result = D1HttpConnection::establish("d1://account:token@").await;
+        assert!(result.is_err());
+        
+        // Empty api_token
+        let result = D1HttpConnection::establish("d1://account:@database").await;
+        assert!(result.is_err());
     }
 }
