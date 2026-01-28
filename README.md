@@ -163,4 +163,4 @@ This project turns D1 into a **real distributed SQL backend** usable across:
 
 ## License
 
-Apache 2.0
+MIT
